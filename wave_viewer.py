@@ -1,8 +1,5 @@
 '''
-plot02.py
-hard coding to synchronize two figure
-Only one core reaches to max
-Try to hide win10 title bar, but it does not work.
+wave-viewer.py
 '''
 import sys
 import numpy as np
@@ -12,99 +9,105 @@ from PyQt5 import QtCore
 import hdf5storage
 
 
-def wave_viewer():
+class WaveViewer:
     '''
-    wave_viewer()
+    WaveViewer
     '''
-    global xmin, xmax, x_width, x_cur, im, spec_data, fig2
 
-    # read spectrogram
-    mat_path = r'specg.mat'
+    def __init__(self, mat_path):
+        '''
+        '''
 
-    spec = hdf5storage.loadmat(mat_path)
-    spec_data = np.squeeze(spec['powspctrm'][0, :, :])
-    spec_timestamps = np.squeeze(spec['time'])
-    spec_freq = np.squeeze(spec['freq'])
+        self.mat_path = mat_path
+        self.x_width = 100
+        self.x_cur = 0
 
-    mpl.rcParams['toolbar'] = 'None'
+        self.spec_data = []
+        self.fig = []
+        self.ax_2d = []
 
-    ###############################################################
-    fig2 = plt.figure()
-    ax2 = plt.subplot()
-    # ax2.set_xlim(2000, 2010)
-    #ax = fig.add_subplot(111, aspect='equal')
-    plt.subplots_adjust(left=0.05, bottom=0, right=1,
-                        top=1, wspace=0, hspace=0)
-    # fig, ax = plt.subplots()
-    fig2.canvas.mpl_connect('key_press_event', press)
-    fig2.canvas.toolbar_visible = False
-    fig2.canvas.header_visible = False
-    fig2.canvas.footer_visible = False
-    fig2.canvas.window().statusBar().setVisible(False)
-    fig2.set_size_inches(10, 2)
-    # im = ax2.imshow(spec_data, extent=extent, cmap=plt.cm.jet,
-    #                 aspect='auto', interpolation='gaussian')
+    def wave_viewer(self):
+        '''
+        wave_viewer()
+        '''
 
-    im = ax2.imshow(spec_data[:, xmin:xmax], cmap=plt.cm.jet,
-                    aspect='auto')
+        hmin, hmax = 0, 1000
+        xmin = self.x_cur
+        xmax = xmin + self.x_width - 1
 
-    # im = ax2.imshow(spec_data, extent=extent, cmap=plt.cm.jet,
-    #                 aspect='auto')
+        # read spectrogram
+        spec = hdf5storage.loadmat(self.mat_path)
+        self.spec_data = np.squeeze(spec['powspctrm'][0, :, :])
+        # spec_timestamps = np.squeeze(spec['time'])
+        # spec_freq = np.squeeze(spec['freq'])
 
-    # plt.colorbar(im)
-    im.set_clim(0, 1000)
+        # create window
+        mpl.rcParams['toolbar'] = 'None'  # need to put here to hide toolbar
+        self.fig = plt.figure()
+        self.fig.set_size_inches(10, 2)
+        self.fig.canvas.mpl_connect('key_press_event', self.press)
+        self.fig.canvas.toolbar_visible = False
+        self.fig.canvas.header_visible = False
+        self.fig.canvas.footer_visible = False
+        self.fig.canvas.window().statusBar().setVisible(False)
 
-    mngr = plt.get_current_fig_manager()
-    geom = mngr.window.geometry()
-    _, _, dx_3, dy_3 = geom.getRect()
-    mngr.window.setGeometry(0, 100, dx_3, dy_3)
-    mngr.window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        # move window position and remove title bar
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()
+        _, _, x_len, y_len = geom.getRect()
+        mngr.window.setGeometry(0, 100, x_len, y_len)
+        mngr.window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
-    # xl = ax.set_xlabel('easy come, easy go')
-    # ax.set_title('Press a key')
-    plt.show()
+        # create subplot
+        ax_plot = plt.subplot()
+        plt.subplots_adjust(left=0.05, bottom=0, right=1,
+                            top=1, wspace=0, hspace=0)
 
+        # show 2D image
+        self.ax_2d = ax_plot.imshow(self.spec_data[:, xmin:xmax], cmap=plt.cm.jet,
+                                    aspect='auto')
+        # plt.colorbar(im)
+        self.ax_2d.set_clim(hmin, hmax)
 
-def press(event):
-    '''
-    press
-    '''
-    global xmin, xmax, x_width, x_cur, im, spec_data, fig2
+        plt.show()
 
-    print('press', event.key)
-    sys.stdout.flush()
+    def press(self, event):
+        '''
+        press
+        '''
 
-    shift = int((xmax - xmin)/16)
-    hmin, hmax = im.get_clim()
+        print('press', event.key)
+        sys.stdout.flush()
 
-    if event.key == 'down':
-        x_width = x_width * 2
-    if event.key == 'up':
-        x_width = int(x_width / 2)
-    if event.key == 'left':
-        x_cur = x_cur + shift
-    if event.key == 'right':
-        x_cur = x_cur - shift
-    if event.key == 'h':
-        hmax = hmax / 2
-    if event.key == 'c':
-        hmax = hmax * 2
+        # shift = int((self.xmax - self.xmin)/16)
+        shift = int(self.x_width/16)
+        hmin, hmax = self.ax_2d.get_clim()
 
-    xmin = x_cur
-    xmax = xmin + x_width - 1
+        if event.key == 'down':
+            self.x_width = self.x_width * 2
+        if event.key == 'up':
+            self.x_width = int(self.x_width / 2)
+        if event.key == 'left':
+            self.x_cur = self.x_cur + shift
+        if event.key == 'right':
+            self.x_cur = self.x_cur - shift
+        if event.key == 'h':
+            hmax = hmax / 2
+        if event.key == 'c':
+            hmax = hmax * 2
 
-    print(xmin, xmax)
-    # ax2.set_xlim(xmin, xmax)
-    im.set_data(spec_data[:, xmin:xmax])
-    im.set_clim(hmin, hmax)
-    fig2.canvas.draw()
+        xmin = self.x_cur
+        xmax = xmin + self.x_width - 1
+
+        print(xmin, xmax)
+        # ax2.set_xlim(xmin, xmax)
+        self.ax_2d.set_data(self.spec_data[:, xmin:xmax])
+        self.ax_2d.set_clim(hmin, hmax)
+        self.fig.canvas.draw()
 
 
 if __name__ == '__main__':
+    input_path = r'specg.mat'
 
-    x_width = 100
-    x_cur = 0
-    xmin = x_cur
-    xmax = xmin + x_width - 1
-
-    wave_viewer()
+    win1 = WaveViewer(input_path)
+    win1.wave_viewer()
