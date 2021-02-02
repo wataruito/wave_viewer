@@ -19,10 +19,13 @@ class WaveViewer:
         '''
 
         self.mat_path = mat_path
-        self.x_width = 100
+        self.x_width = 3195
         self.x_cur = 0
+        self.hmin, self.hmax = 0.0, 8192000.0
 
         self.spec_data = []
+        self.spec_timestamps = []
+        self.freq_min, self.freq_max = 0.0, 0.0
         self.fig = []
         self.ax_2d = []
 
@@ -30,16 +33,21 @@ class WaveViewer:
         '''
         wave_viewer()
         '''
-
-        hmin, hmax = 0, 1000
-        xmin = self.x_cur
-        xmax = xmin + self.x_width - 1
-
         # read spectrogram
         spec = hdf5storage.loadmat(self.mat_path)
         self.spec_data = np.squeeze(spec['powspctrm'][0, :, :])
-        # spec_timestamps = np.squeeze(spec['time'])
-        # spec_freq = np.squeeze(spec['freq'])
+        self.spec_timestamps = np.squeeze(spec['time'])
+        spec_freq = np.squeeze(spec['freq'])
+
+        # create y tick labels
+        spec_y = np.arange(0, 201, 25)
+        spec_y_value = spec_freq[spec_y].astype(int)
+
+        # compute extent
+        xmin = self.x_cur
+        xmax = xmin + self.x_width - 1
+        extent = [self.spec_timestamps[xmin],
+                  self.spec_timestamps[xmax], 0, 200]
 
         # create window
         mpl.rcParams['toolbar'] = 'None'  # need to put here to hide toolbar
@@ -64,10 +72,13 @@ class WaveViewer:
                             top=1, wspace=0, hspace=0)
 
         # show 2D image
-        self.ax_2d = ax_plot.imshow(self.spec_data[:, xmin:xmax], cmap=plt.cm.jet,
+        self.ax_2d = ax_plot.imshow(self.spec_data[:, xmin:xmax], extent=extent, cmap=plt.cm.jet,
+                                    origin='lower',
                                     aspect='auto')
         # plt.colorbar(im)
-        self.ax_2d.set_clim(hmin, hmax)
+        self.ax_2d.set_clim(self.hmin, self.hmax)
+        ax_plot.set_yticks(spec_y)
+        ax_plot.set_yticklabels(spec_y_value)
 
         plt.show()
 
@@ -76,12 +87,12 @@ class WaveViewer:
         press
         '''
 
-        print('press', event.key)
+        # print('press', event.key)
         sys.stdout.flush()
 
         # shift = int((self.xmax - self.xmin)/16)
         shift = int(self.x_width/16)
-        hmin, hmax = self.ax_2d.get_clim()
+        # hmin, hmax = self.ax_2d.get_clim()
 
         if event.key == 'down':
             self.x_width = self.x_width * 2
@@ -89,20 +100,29 @@ class WaveViewer:
             self.x_width = int(self.x_width / 2)
         if event.key == 'left':
             self.x_cur = self.x_cur + shift
+            if self.x_cur + self.x_width - 1 > self.spec_timestamps.size - 1:
+                self.x_cur = self.spec_timestamps.size - 1 - self.x_width + 1
         if event.key == 'right':
             self.x_cur = self.x_cur - shift
+            if self.x_cur < 0:
+                self.x_cur = 0
         if event.key == 'h':
-            hmax = hmax / 2
+            self.hmax = self.hmax / 2
         if event.key == 'c':
-            hmax = hmax * 2
+            self.hmax = self.hmax * 2
+        if event.key == 'e':
+            pass
 
         xmin = self.x_cur
         xmax = xmin + self.x_width - 1
+        extent = [self.spec_timestamps[xmin],
+                  self.spec_timestamps[xmax], 0, 200]
 
-        print(xmin, xmax)
+        print('press', event.key, ': ', xmin, xmax, self.hmax)
         # ax2.set_xlim(xmin, xmax)
         self.ax_2d.set_data(self.spec_data[:, xmin:xmax])
-        self.ax_2d.set_clim(hmin, hmax)
+        self.ax_2d.set_clim(self.hmin, self.hmax)
+        self.ax_2d.set_extent(extent)
         self.fig.canvas.draw()
 
 
