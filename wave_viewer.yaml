@@ -1,0 +1,9 @@
+name: wave-viewer
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - conda-forge::jupyterlab
+  - conda-forge::ipympl
+  - conda-forge::nodejs
+  - anaconda
