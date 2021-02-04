@@ -29,9 +29,8 @@ class WaveViewer:
         self.timestamps = []
 
         self.fig = []
+        self.ax_subplot = []
         self.ax_plot = []
-        self.ax_1d = []
-        self.ax_2d = []
 
     def wave_viewer(self):
         '''
@@ -56,7 +55,7 @@ class WaveViewer:
         mngr.window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
         # create subplot
-        self.ax_plot = plt.subplot()
+        self.ax_subplot = plt.subplot()
         plt.subplots_adjust(left=0.05, bottom=0, right=1,
                             top=1, wspace=0, hspace=0)
 
@@ -78,15 +77,15 @@ class WaveViewer:
                       self.timestamps[xmax], 0, 200]
 
             # show 2D image
-            self.ax_2d = self.ax_plot.imshow(self.wave_data[:, xmin:xmax],
-                                             extent=extent, cmap=plt.cm.jet,
-                                             origin='lower',
-                                             aspect='auto')
+            self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
+                                                  extent=extent, cmap=plt.cm.jet,
+                                                  origin='lower',
+                                                  aspect='auto')
             # adjust 2D image
             # plt.colorbar(im)
-            self.ax_2d.set_clim(self.hmin, self.hmax)
-            self.ax_plot.set_yticks(spec_y)
-            self.ax_plot.set_yticklabels(spec_y_value)
+            self.ax_plot.set_clim(self.hmin, self.hmax)
+            self.ax_subplot.set_yticks(spec_y)
+            self.ax_subplot.set_yticklabels(spec_y_value)
 
         else:
             # read wave
@@ -101,7 +100,7 @@ class WaveViewer:
             xmax *= 10
 
             # plot wave
-            self.ax_1d, = self.ax_plot.plot(
+            self.ax_plot, = self.ax_subplot.plot(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
 
         plt.show()
@@ -125,11 +124,11 @@ class WaveViewer:
             self.x_cur = self.x_cur + shift
             if self.x_cur + self.x_width - 1 > xmax_lim - 1:
                 self.x_cur = xmax_lim - 1 - self.x_width + 1
-        if event.key == 'left':
+        elif event.key == 'left':
             self.x_cur = self.x_cur - shift
             if self.x_cur < 0:
                 self.x_cur = 0
-        if event.key == 'up':
+        elif event.key == 'up':
             self.x_width = self.x_width * 2
             if self.x_cur + self.x_width - 1 > xmax_lim - 1:
                 self.x_cur = xmax_lim - 1 - self.x_width + 1
@@ -137,13 +136,13 @@ class WaveViewer:
                 self.x_cur = 0
             if self.x_cur + self.x_width - 1 > xmax_lim - 1:
                 self.x_width = xmax_lim - 1
-        if event.key == 'down':
+        elif event.key == 'down':
             self.x_width = int(self.x_width / 2)
-        if event.key == 'h':
+        elif event.key == 'h':
             self.hmax = self.hmax / 2
-        if event.key == 'c':
+        elif event.key == 'c':
             self.hmax = self.hmax * 2
-        if event.key == 'e':
+        elif event.key == 'e':
             pass
 
         xmin = self.x_cur
@@ -154,27 +153,27 @@ class WaveViewer:
                       self.timestamps[xmax], 0, 200]
 
             print('press', event.key, ': ', xmin, xmax, self.hmax)
-            self.ax_2d.set_data(self.wave_data[:, xmin:xmax])
-            self.ax_2d.set_clim(self.hmin, self.hmax)
-            self.ax_2d.set_extent(extent)
+            self.ax_plot.set_data(self.wave_data[:, xmin:xmax])
+            self.ax_plot.set_clim(self.hmin, self.hmax)
+            self.ax_plot.set_extent(extent)
         else:
             xmin *= 10
             xmax *= 10
 
             print('press', event.key, ': ', xmin, xmax)
-            self.ax_1d.set_data(
+            self.ax_plot.set_data(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax])
-            self.ax_plot.relim()
-            self.ax_plot.autoscale_view(True, True, True)
+            self.ax_subplot.relim()
+            self.ax_subplot.autoscale_view(True, True, True)
 
         self.fig.canvas.draw()
 
 
 if __name__ == '__main__':
-    input_path = r'specg_flat.mat'
-    input_d_type = 'spec'
-    #input_path = r'gamma_flat.mat'
-    #input_d_type = 'gamma'
+    #input_path = r'specg_flat.mat'
+    #input_d_type = 'spec'
+    input_path = r'gamma_flat.mat'
+    input_d_type = 'gamma'
 
     win1 = WaveViewer(input_path, input_d_type)
     win1.wave_viewer()
