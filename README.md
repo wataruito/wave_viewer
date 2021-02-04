@@ -22,4 +22,5 @@ pip install -e .
 3. edit _classic_test_patch.mplstyle
 
 jupyter notebook shows error message for matplotlib Bad key “text.kerning_factor”
+
 https://stackoverflow.com/questions/61171307/jupyter-notebook-shows-error-message-for-matplotlib-bad-key-text-kerning-factor
