@@ -7,4 +7,5 @@ trash
 .vscode
 .ipynb_checkpoints
 flat_mat.m
-specg.mat
+specg_flat.mat
+gamma_flat.mat
