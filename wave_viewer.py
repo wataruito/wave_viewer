@@ -1,7 +1,9 @@
 '''
 wave-viewer.py
 '''
+
 import sys
+import multiprocessing
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -9,17 +11,22 @@ from PyQt5 import QtCore
 import hdf5storage
 
 
-class WaveViewer:
+class WaveViewer(multiprocessing.Process):
     '''
     WaveViewer
     '''
 
-    def __init__(self, mat_path, d_type):
+    def __init__(self, task_queue, result_queue, mat_path, d_type, w_id, master):
         '''
         '''
+        multiprocessing.Process.__init__(self)
+        self.task_queue = task_queue
+        self.result_queue = result_queue
 
         self.mat_path = mat_path
         self.d_type = d_type
+        self.w_id = w_id
+        self.master = master
 
         self.x_width = 3195
         self.x_cur = 0
@@ -32,7 +39,9 @@ class WaveViewer:
         self.ax_subplot = []
         self.ax_plot = []
 
-    def wave_viewer(self):
+        self.win_size = [10.0, 2.0]
+
+    def run(self):
         '''
         wave_viewer()
         '''
@@ -40,7 +49,7 @@ class WaveViewer:
         # create window
         mpl.rcParams['toolbar'] = 'None'    # need to put here to hide toolbar
         self.fig = plt.figure()
-        self.fig.set_size_inches(10, 2)
+        self.fig.set_size_inches(self.win_size[0], self.win_size[1])
         self.fig.canvas.mpl_connect('key_press_event', self.press)
         self.fig.canvas.toolbar_visible = False
         self.fig.canvas.header_visible = False
@@ -51,13 +60,25 @@ class WaveViewer:
         mngr = plt.get_current_fig_manager()
         geom = mngr.window.geometry()
         _, _, x_len, y_len = geom.getRect()
-        mngr.window.setGeometry(0, 100, x_len, y_len)
+        if self.master:
+            mngr.window.setGeometry(
+                0, 100 + self.w_id * y_len,
+                x_len, int(y_len*1.1111))
+        else:
+            mngr.window.setGeometry(
+                0, 100 + self.w_id * y_len,
+                x_len, y_len)
         mngr.window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
         # create subplot
         self.ax_subplot = plt.subplot()
-        plt.subplots_adjust(left=0.05, bottom=0, right=1,
-                            top=1, wspace=0, hspace=0)
+        if self.master:
+            bottom = 0.1
+        else:
+            bottom = 0.1  # DEBUG for x-scale. Nomal is bottom = 0
+        plt.subplots_adjust(left=0.05, right=1,
+                            bottom=bottom, top=1,
+                            wspace=0, hspace=0)
 
         if self.d_type == 'spec':
             # read spectrogram
@@ -102,6 +123,8 @@ class WaveViewer:
             # plot wave
             self.ax_plot, = self.ax_subplot.plot(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
+            self.ax_subplot.set_xlim(
+                self.timestamps[xmin], self.timestamps[xmax])
 
         plt.show()
 
@@ -116,26 +139,26 @@ class WaveViewer:
         shift = int(self.x_width/16)
 
         if self.d_type == 'spec':
-            xmax_lim = self.timestamps.size
+            x_size = self.timestamps.size - 1
         else:
-            xmax_lim = int(self.timestamps.size / 10) + 1
+            x_size = int(self.timestamps.size / 10)
 
         if event.key == 'right':
             self.x_cur = self.x_cur + shift
-            if self.x_cur + self.x_width - 1 > xmax_lim - 1:
-                self.x_cur = xmax_lim - 1 - self.x_width + 1
+            if self.x_cur + self.x_width - 1 > (x_size - 1):
+                self.x_cur = (x_size - 1) - self.x_width + 1
         elif event.key == 'left':
             self.x_cur = self.x_cur - shift
             if self.x_cur < 0:
                 self.x_cur = 0
         elif event.key == 'up':
             self.x_width = self.x_width * 2
-            if self.x_cur + self.x_width - 1 > xmax_lim - 1:
-                self.x_cur = xmax_lim - 1 - self.x_width + 1
+            if self.x_cur + self.x_width - 1 > (x_size - 1):
+                self.x_cur = (x_size - 1) - self.x_width + 1
             if self.x_cur < 0:
                 self.x_cur = 0
-            if self.x_cur + self.x_width - 1 > xmax_lim - 1:
-                self.x_width = xmax_lim - 1
+            if self.x_cur + self.x_width - 1 > (x_size - 1):
+                self.x_width = (x_size - 1)
         elif event.key == 'down':
             self.x_width = int(self.x_width / 2)
         elif event.key == 'h':
@@ -143,7 +166,7 @@ class WaveViewer:
         elif event.key == 'c':
             self.hmax = self.hmax * 2
         elif event.key == 'e':
-            pass
+            plt.close(self.fig)
 
         xmin = self.x_cur
         xmax = self.x_cur + self.x_width - 1
@@ -163,17 +186,40 @@ class WaveViewer:
             print('press', event.key, ': ', xmin, xmax)
             self.ax_plot.set_data(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax])
-            self.ax_subplot.relim()
+            # self.ax_subplot.relim()
+            self.ax_subplot.set_xlim(
+                self.timestamps[xmin], self.timestamps[xmax])
             self.ax_subplot.autoscale_view(True, True, True)
 
         self.fig.canvas.draw()
 
 
 if __name__ == '__main__':
-    #input_path = r'specg_flat.mat'
-    #input_d_type = 'spec'
-    input_path = r'gamma_flat.mat'
-    input_d_type = 'gamma'
 
-    win1 = WaveViewer(input_path, input_d_type)
-    win1.wave_viewer()
+    input_path_list = [
+        r'specg_flat.mat',
+        r'gamma_flat.mat'
+    ]
+
+    input_d_type_list = [
+        'spec',
+        'gamma'
+    ]
+
+    input_master_list = [
+        False,
+        True
+    ]
+
+    tasks = multiprocessing.JoinableQueue()
+    results = multiprocessing.Queue()
+
+    waveviewers = [WaveViewer(
+        tasks, results, input_path_list[i], input_d_type_list[i], i, input_master_list[i]) for i in range(2)]
+
+    for w in waveviewers:
+
+        w.start()
+        print(w)
+
+    tasks.join()
