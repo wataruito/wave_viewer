@@ -201,6 +201,7 @@ class WaveViewer(multiprocessing.Process):
         timer.add_callback(self.call_back)
         timer.start()
 
+        plt.grid(ls='--', lw=0.25)
         plt.show()
 
     def call_back(self):
