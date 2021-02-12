@@ -286,20 +286,30 @@ class WaveViewer(multiprocessing.Process):
 if __name__ == '__main__':
 
     # open windows for each waves and specs
+    # process_members = [
+    #     [0, r'input_data\RIG01_171219_140419_specg_flat.mat',
+    #         'spec', (0, 100, 1000, 100)],
+    #     [1, r'input_data\RIG01_171219_140419_lfp_flat.mat',
+    #         'wave', (0, 200, 1000, 100)],
+    #     [2, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #         'wave', (0, 300, 1000, 100)],
+    #     [3, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #         'wave', (0, 400, 1000, 100)],
+    #     [4, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #         'wave', (0, 500, 1000, 100)],
+    #     [5, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #         'wave', (0, 600, 1000, 100)],
+    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #         'x_axis', (0, 700, 1000, 30)]
+    # ]
+
     process_members = [
-        [0, r'RIG01_171219_140419_specg_flat.mat',
-            'spec', (0, 100, 1000, 100)],
-        [1, r'RIG01_171219_140419_lfp_flat.mat', 'wave', (0, 200, 1000, 100)],
-        [2, r'RIG01_171219_140419_gamma_flat.mat',
-            'wave', (0, 300, 1000, 100)],
-        [3, r'RIG01_171219_140419_gamma_flat.mat',
-            'wave', (0, 400, 1000, 100)],
-        [4, r'RIG01_171219_140419_gamma_flat.mat',
-            'wave', (0, 500, 1000, 100)],
-        [5, r'RIG01_171219_140419_gamma_flat.mat',
-            'wave', (0, 600, 1000, 100)],
-        [6, r'RIG01_171219_140419_gamma_flat.mat',
-            'x_axis', (0, 700, 1000, 30)]
+        # [0, r'input_data\short_specg_flat.mat',
+        # 'spec', (0, 100, 1000, 100)],
+        [1, r'input_data\short_gamma_flat.mat',
+         'wave', (0, 100, 1000, 100)],
+        [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+         'x_axis', (0, 200, 1000, 30)]
     ]
 
     input_process_list = {}
