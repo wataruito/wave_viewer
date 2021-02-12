@@ -86,6 +86,10 @@ class WaveViewer(multiprocessing.Process):
 
         self.x_width = 3195
         self.x_cur = 0
+
+        self.t_width = 10.0
+        self.t_cur = 10.0
+
         self.hmin, self.hmax = 0.0, 8192000.0
 
         self.wave_data = []
@@ -102,18 +106,22 @@ class WaveViewer(multiprocessing.Process):
         '''
         wave_viewer()
         '''
+
         self.create_window()
+
         if self.d_type == 'spec':
             self.disp_2d()
         else:
             self.disp_1d()
 
+        # start timer
         # if not self.master:
         timer = self.fig.canvas.new_timer(interval=10)
-        timer.add_callback(self.call_back)
+        timer.add_callback(self.timer_call_back)
         timer.start()
 
-        plt.grid(ls='--', lw=0.25)
+        # draw glid
+        # plt.grid(ls='--', lw=0.25)
         plt.show()
 
     def create_window(self):
@@ -149,11 +157,13 @@ class WaveViewer(multiprocessing.Process):
         self.ax_subplot = plt.subplot()
 
         # Define plotting area. It determine either show up axis or not
-        bottom = 0.0  # DEBUG for x-scale. Nomal is bottom = 0
-        # bottom = 0.2  # DEBUG for x-scale. Nomal is bottom = 0
+        # bottom = 0.0  # DEBUG for x-scale. Nomal is bottom = 0
+        bottom = 0.2  # DEBUG for x-scale. Nomal is bottom = 0
         plt.subplots_adjust(left=0.05, right=1,
                             bottom=bottom, top=1,
                             wspace=0, hspace=0)
+
+        plt.grid(ls='--', lw=0.25)
 
     def disp_2d(self):
         '''
@@ -165,24 +175,28 @@ class WaveViewer(multiprocessing.Process):
         self.timestamps = np.squeeze(spec['time'])
         spec_freq = np.squeeze(spec['freq'])
 
-        # create y tick labels
-        spec_y = np.arange(0, 201, 25)
-        spec_y_value = spec_freq[spec_y].astype(int)
-
         # compute extent
-        xmin = self.x_cur
-        xmax = xmin + self.x_width - 1
-        extent = [self.timestamps[xmin],
-                  self.timestamps[xmax], 0, 200]
+        t_min = self.t_cur - self.t_width/2
+        t_max = self.t_cur + self.t_width/2
+        _, xmin = self.find_nearest(self.timestamps, t_min)
+        _, xmax = self.find_nearest(self.timestamps, t_max)
+        extent = [t_min, t_max, 0, 200]
 
         # show 2D image
         self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
                                               extent=extent, cmap=plt.cm.jet,
                                               origin='lower',
                                               aspect='auto')
-        # adjust 2D image
+
+        self.ax_subplot.set_xlim(t_min, t_max)
+
+        # set color level
         # plt.colorbar(im)
         self.ax_plot.set_clim(self.hmin, self.hmax)
+
+        # create y tick labels
+        spec_y = np.arange(0, 201, 25)
+        spec_y_value = spec_freq[spec_y].astype(int)
         self.ax_subplot.set_yticks(spec_y)
         self.ax_subplot.set_yticklabels(spec_y_value)
 
@@ -196,41 +210,47 @@ class WaveViewer(multiprocessing.Process):
         self.timestamps = np.squeeze(wave['timestamps'])
 
         # compute extent
-        xmin = self.x_cur
-        xmax = xmin + self.x_width - 1
-        xmin *= 10
-        xmax *= 10
+        t_min = self.t_cur - self.t_width/2
+        t_max = self.t_cur + self.t_width/2
+        _, xmin = self.find_nearest(self.timestamps, t_min)
+        _, xmax = self.find_nearest(self.timestamps, t_max)
 
-        # plot wave
-
+        # plot wave or x_axis
         if self.d_type == 'wave':
             self.ax_plot, = self.ax_subplot.plot(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
-            self.ax_subplot.set_xlim(
-                self.timestamps[xmin], self.timestamps[xmax])
 
         if self.d_type == 'x_axis':
             self.ax_plot, = self.ax_subplot.plot(
-                self.timestamps[xmin:xmax], [0 for i in range(xmin, xmax)], linewidth=0)
-            self.ax_subplot.set_xlim(
-                self.timestamps[xmin], self.timestamps[xmax])
+                self.timestamps[xmin:xmax], np.full(xmax-xmin, 0), linewidth=0)
 
             plt.subplots_adjust(left=0.05, right=1,
                                 bottom=0.99, top=1,
                                 wspace=0, hspace=0)
             plt.yticks([])
 
-    def call_back(self):
+        self.ax_subplot.set_xlim(t_min, t_max)
+
+    def timer_call_back(self):
         '''
         call_back()
         '''
         if not self.task_queue.empty():
             next_task = self.task_queue.get()
-            self.press(next_task)
+            self.update_extent(next_task)
+            self.update_plot()
             self.task_queue.task_done()
         return True
 
-    def press(self, event):
+    def find_nearest(self, array, value):
+        '''
+        find_nearest
+        '''
+        array = np.asarray(array)
+        idx = (np.abs(array - value)).argmin()
+        return array[idx], idx
+
+    def update_extent(self, event):
         '''
         press
         '''
@@ -241,31 +261,16 @@ class WaveViewer(multiprocessing.Process):
         if hasattr(event, 'key'):
             event = event.key
 
-        shift = int(self.x_width/16)
-
-        if self.d_type == 'spec':
-            x_size = self.timestamps.size - 1
-        else:
-            x_size = int(self.timestamps.size / 10)
+        shift = self.t_width/16.0
 
         if event == 'right':
-            self.x_cur = self.x_cur + shift
-            if self.x_cur + self.x_width - 1 > (x_size - 1):
-                self.x_cur = (x_size - 1) - self.x_width + 1
+            self.t_cur = self.t_cur + shift
         elif event == 'left':
-            self.x_cur = self.x_cur - shift
-            if self.x_cur < 0:
-                self.x_cur = 0
+            self.t_cur = self.t_cur - shift
         elif event == 'up':
-            self.x_width = self.x_width * 2
-            if self.x_cur + self.x_width - 1 > (x_size - 1):
-                self.x_cur = (x_size - 1) - self.x_width + 1
-            if self.x_cur < 0:
-                self.x_cur = 0
-            if self.x_cur + self.x_width - 1 > (x_size - 1):
-                self.x_width = (x_size - 1)
+            self.t_width = self.t_width * 2.0
         elif event == 'down':
-            self.x_width = int(self.x_width / 2)
+            self.t_width = self.t_width / 2.0
         elif event == 'h':  # hotter
             self.hmax = self.hmax / 2
         elif event == 'c':  # cooler
@@ -273,27 +278,35 @@ class WaveViewer(multiprocessing.Process):
         elif event == 'e':
             plt.close(self.fig)
 
-        xmin = self.x_cur
-        xmax = self.x_cur + self.x_width - 1
+        if self.t_width > 3600.0:
+            self.t_width = 3600.0
+        if self.t_cur + self.t_width/2.0 > 3600.0:
+            self.t_cur = 3600.0 - self.t_width/2.0
+        if self.t_cur - self.t_width/2.0 < 0.0:
+            self.t_cur = 0.0 + self.t_width/2.0
+
+    def update_plot(self):
+        # compute extent
+        t_min = self.t_cur - self.t_width/2
+        t_max = self.t_cur + self.t_width/2
+        _, xmin = self.find_nearest(self.timestamps, t_min)
+        _, xmax = self.find_nearest(self.timestamps, t_max)
 
         if self.d_type == 'spec':
-            extent = [self.timestamps[xmin],
-                      self.timestamps[xmax], 0, 200]
+            extent = [t_min, t_max, 0, 200]
 
             # print('press', event, ': ', xmin, xmax, self.hmax)
             self.ax_plot.set_data(self.wave_data[:, xmin:xmax])
             self.ax_plot.set_clim(self.hmin, self.hmax)
             self.ax_plot.set_extent(extent)
-        else:
-            xmin *= 10
-            xmax *= 10
+            self.ax_subplot.set_xlim(t_min, t_max)
 
+        else:
             # print('press', event, ': ', xmin, xmax)
             self.ax_plot.set_data(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax])
             # self.ax_subplot.relim()
-            self.ax_subplot.set_xlim(
-                self.timestamps[xmin], self.timestamps[xmax])
+            self.ax_subplot.set_xlim(t_min, t_max)
             self.ax_subplot.autoscale_view(True, True, True)
 
         self.fig.canvas.draw()
@@ -320,12 +333,12 @@ if __name__ == '__main__':
     # ]
 
     process_members = [
-        # [0, r'input_data\short_specg_flat.mat',
-        # 'spec', (0, 100, 1000, 100)],
+        [0, r'input_data\short_specg_flat.mat',
+         'spec', (0, 100, 1000, 100)],
         [1, r'input_data\short_gamma_flat.mat',
-         'wave', (0, 100, 1000, 100)],
+         'wave', (0, 200, 1000, 100)],
         [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-         'x_axis', (0, 200, 1000, 30)]
+         'x_axis', (0, 300, 1000, 30)]
     ]
 
     input_process_list = {}
