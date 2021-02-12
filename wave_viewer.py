@@ -102,6 +102,24 @@ class WaveViewer(multiprocessing.Process):
         '''
         wave_viewer()
         '''
+        self.create_window()
+        if self.d_type == 'spec':
+            self.disp_2d()
+        else:
+            self.disp_1d()
+
+        # if not self.master:
+        timer = self.fig.canvas.new_timer(interval=10)
+        timer.add_callback(self.call_back)
+        timer.start()
+
+        plt.grid(ls='--', lw=0.25)
+        plt.show()
+
+    def create_window(self):
+        '''
+        create_window
+        '''
         # create window
         mpl.rcParams['toolbar'] = 'None'    # need to put here to hide toolbar
         self.fig = plt.figure()
@@ -137,72 +155,70 @@ class WaveViewer(multiprocessing.Process):
                             bottom=bottom, top=1,
                             wspace=0, hspace=0)
 
-        if self.d_type == 'spec':
-            # read spectrogram
-            spec = hdf5storage.loadmat(self.mat_path)
-            self.wave_data = np.squeeze(spec['powspctrm'][0, :, :])
-            self.timestamps = np.squeeze(spec['time'])
-            spec_freq = np.squeeze(spec['freq'])
+    def disp_2d(self):
+        '''
+        disp_2d
+        '''
+        # read spectrogram
+        spec = hdf5storage.loadmat(self.mat_path)
+        self.wave_data = np.squeeze(spec['powspctrm'][0, :, :])
+        self.timestamps = np.squeeze(spec['time'])
+        spec_freq = np.squeeze(spec['freq'])
 
-            # create y tick labels
-            spec_y = np.arange(0, 201, 25)
-            spec_y_value = spec_freq[spec_y].astype(int)
+        # create y tick labels
+        spec_y = np.arange(0, 201, 25)
+        spec_y_value = spec_freq[spec_y].astype(int)
 
-            # compute extent
-            xmin = self.x_cur
-            xmax = xmin + self.x_width - 1
-            extent = [self.timestamps[xmin],
-                      self.timestamps[xmax], 0, 200]
+        # compute extent
+        xmin = self.x_cur
+        xmax = xmin + self.x_width - 1
+        extent = [self.timestamps[xmin],
+                  self.timestamps[xmax], 0, 200]
 
-            # show 2D image
-            self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
-                                                  extent=extent, cmap=plt.cm.jet,
-                                                  origin='lower',
-                                                  aspect='auto')
-            # adjust 2D image
-            # plt.colorbar(im)
-            self.ax_plot.set_clim(self.hmin, self.hmax)
-            self.ax_subplot.set_yticks(spec_y)
-            self.ax_subplot.set_yticklabels(spec_y_value)
+        # show 2D image
+        self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
+                                              extent=extent, cmap=plt.cm.jet,
+                                              origin='lower',
+                                              aspect='auto')
+        # adjust 2D image
+        # plt.colorbar(im)
+        self.ax_plot.set_clim(self.hmin, self.hmax)
+        self.ax_subplot.set_yticks(spec_y)
+        self.ax_subplot.set_yticklabels(spec_y_value)
 
-        else:
-            # read wave
-            wave = hdf5storage.loadmat(self.mat_path)
-            self.wave_data = np.squeeze(wave['data'])[:, 0]
-            self.timestamps = np.squeeze(wave['timestamps'])
+    def disp_1d(self):
+        '''
+        disp_1d
+        '''
+        # read wave
+        wave = hdf5storage.loadmat(self.mat_path)
+        self.wave_data = np.squeeze(wave['data'])[:, 0]
+        self.timestamps = np.squeeze(wave['timestamps'])
 
-            # compute extent
-            xmin = self.x_cur
-            xmax = xmin + self.x_width - 1
-            xmin *= 10
-            xmax *= 10
+        # compute extent
+        xmin = self.x_cur
+        xmax = xmin + self.x_width - 1
+        xmin *= 10
+        xmax *= 10
 
-            # plot wave
+        # plot wave
 
-            if self.d_type == 'wave':
-                self.ax_plot, = self.ax_subplot.plot(
-                    self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
-                self.ax_subplot.set_xlim(
-                    self.timestamps[xmin], self.timestamps[xmax])
+        if self.d_type == 'wave':
+            self.ax_plot, = self.ax_subplot.plot(
+                self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
+            self.ax_subplot.set_xlim(
+                self.timestamps[xmin], self.timestamps[xmax])
 
-            if self.d_type == 'x_axis':
-                self.ax_plot, = self.ax_subplot.plot(
-                    self.timestamps[xmin:xmax], [0 for i in range(xmin, xmax)], linewidth=0)
-                self.ax_subplot.set_xlim(
-                    self.timestamps[xmin], self.timestamps[xmax])
+        if self.d_type == 'x_axis':
+            self.ax_plot, = self.ax_subplot.plot(
+                self.timestamps[xmin:xmax], [0 for i in range(xmin, xmax)], linewidth=0)
+            self.ax_subplot.set_xlim(
+                self.timestamps[xmin], self.timestamps[xmax])
 
-                plt.subplots_adjust(left=0.05, right=1,
-                                    bottom=0.99, top=1,
-                                    wspace=0, hspace=0)
-                plt.yticks([])
-
-            # if not self.master:
-        timer = self.fig.canvas.new_timer(interval=10)
-        timer.add_callback(self.call_back)
-        timer.start()
-
-        plt.grid(ls='--', lw=0.25)
-        plt.show()
+            plt.subplots_adjust(left=0.05, right=1,
+                                bottom=0.99, top=1,
+                                wspace=0, hspace=0)
+            plt.yticks([])
 
     def call_back(self):
         '''
