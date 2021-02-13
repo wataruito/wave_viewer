@@ -14,16 +14,21 @@ import hdf5storage
 class WaveViewerMaster():
     '''
     WaveViewer
+        Master window
     '''
 
-    def __init__(self, process_list, win_geom):
+    def __init__(self, process_list, win_geom, max_time):
         '''
         '''
         self.process_list = process_list
         self.fig = []
-        # self.win_size = [10.0, 0.5]     # window size in inch
-        # self.win_pos = [0, 20]           # window position in pixel
+        self.mngr = []
+
         self.win_geom = win_geom
+
+        self.t_width = 10.0
+        self.t_cur = 10.0
+        self.max_time = max_time
 
     def run(self):
         '''
@@ -32,7 +37,6 @@ class WaveViewerMaster():
         # create window
         mpl.rcParams['toolbar'] = 'None'    # need to put here to hide toolbar
         self.fig = plt.figure()
-        # self.fig.set_size_inches(self.win_size[0], self.win_size[1])
         self.fig.canvas.mpl_connect('key_press_event', self.press)
         self.fig.canvas.toolbar_visible = False
         self.fig.canvas.header_visible = False
@@ -40,10 +44,8 @@ class WaveViewerMaster():
         self.fig.canvas.window().statusBar().setVisible(False)
 
         # move window position and remove title bar
-        mngr = plt.get_current_fig_manager()
-        # geom = mngr.window.geometry()
-        # _, _, x_len, y_len = geom.getRect()
-        mngr.window.setGeometry(*self.win_geom)
+        self.mngr = plt.get_current_fig_manager()
+        self.mngr.window.setGeometry(*self.win_geom)
 
         plt.show()
 
@@ -54,27 +56,61 @@ class WaveViewerMaster():
         # print('press', event.key)
         sys.stdout.flush()
 
+        if hasattr(event, 'key'):
+            event = event.key
+
+        shift = self.t_width/16.0
+
+        if event == 'right':
+            self.t_cur = self.t_cur + shift
+        elif event == 'left':
+            self.t_cur = self.t_cur - shift
+        elif event == 'up':
+            self.t_width = self.t_width * 2.0
+        elif event == 'down':
+            self.t_width = self.t_width / 2.0
+
+        elif event == 'e':
+            plt.close(self.fig)
+
+        if self.t_width > self.max_time:
+            self.t_width = self.max_time
+        if self.t_cur + self.t_width/2.0 > self.max_time:
+            self.t_cur = self.max_time - self.t_width/2.0
+        if self.t_cur - self.t_width/2.0 < 0.0:
+            self.t_cur = 0.0 + self.t_width/2.0
+
+        # get position of master window
+        geom = self.mngr.window.geometry()
+        orig_x, orig_y, _, _ = geom.getRect()
+        orig_y = orig_y - 20
+
+        # send key and the extent to each process
         for _process_id_key in self.process_list:
-            self.process_list[_process_id_key][1].put(event.key)
+            self.process_list[_process_id_key][1].put(event)
+            if event in ('right', 'left', 'up', 'down'):
+                self.process_list[_process_id_key][1].put(self.t_cur)
+                self.process_list[_process_id_key][1].put(self.t_width)
+            if event == 'm':
+                orig_y = orig_y + 100
+                self.process_list[_process_id_key][1].put(orig_x)
+                self.process_list[_process_id_key][1].put(orig_y)
+
+        # wait for completion of task
         for _process_id_key in self.process_list:
             self.process_list[_process_id_key][1].join()
-
-        if event.key == 'e':
-            plt.close(self.fig)
 
 
 class WaveViewer(multiprocessing.Process):
     '''
     WaveViewer
+        Subordinate window
     '''
 
     def __init__(self, task_queue, result_queue, w_id, mat_path, d_type, win_geom):
         '''
         '''
         multiprocessing.Process.__init__(self)
-        # self.namespace = namespace
-        # self.event = event
-        # self.process_list = []
 
         self.task_queue = task_queue
         self.result_queue = result_queue
@@ -82,10 +118,10 @@ class WaveViewer(multiprocessing.Process):
         self.mat_path = mat_path
         self.d_type = d_type
         self.w_id = w_id
-        # self.master = master
 
-        self.x_width = 3195
-        self.x_cur = 0
+        self.t_width = 10.0
+        self.t_cur = 10.0
+
         self.hmin, self.hmax = 0.0, 8192000.0
 
         self.wave_data = []
@@ -94,38 +130,50 @@ class WaveViewer(multiprocessing.Process):
         self.fig = []
         self.ax_subplot = []
         self.ax_plot = []
+        self.mngr = []
 
-        # self.win_geom = [10.0, 2.0]
+        self.x_axis = False
+
         self.win_geom = win_geom
+        self.orig_x, self.orig_y = win_geom[0], win_geom[1]
 
     def run(self):
         '''
         wave_viewer()
         '''
+
+        self.create_window()
+
+        if self.d_type == 'spec':
+            self.disp_2d()
+        else:
+            self.disp_1d()
+
+        # start timer for receiving message from master window
+        timer = self.fig.canvas.new_timer(interval=10)
+        timer.add_callback(self.timer_call_back)
+        timer.start()
+
+        plt.show()
+
+    def create_window(self):
+        '''
+        create_window
+        '''
         # create window
         mpl.rcParams['toolbar'] = 'None'    # need to put here to hide toolbar
         self.fig = plt.figure()
-        # self.fig.set_size_inches(self.win_size[0], self.win_size[1])
-        # self.fig.canvas.mpl_connect('key_press_event', self.press)
+        self.fig.canvas.mpl_connect(
+            'key_press_event', self.local_key_call_back)
         self.fig.canvas.toolbar_visible = False
         self.fig.canvas.header_visible = False
         self.fig.canvas.footer_visible = False
         self.fig.canvas.window().statusBar().setVisible(False)
 
         # move window position and remove title bar
-        mngr = plt.get_current_fig_manager()
-        # geom = mngr.window.geometry()
-        # _, _, x_len, y_len = geom.getRect()
-        # if self.master:
-        #     mngr.window.setGeometry(
-        #         0, 100 + self.w_id * y_len,
-        #         x_len, int(y_len*1.1111))
-        # else:
-        #     mngr.window.setGeometry(
-        #         0, 100 + self.w_id * y_len,
-        #         x_len, y_len)
-        mngr.window.setGeometry(*self.win_geom)
-        mngr.window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        self.mngr = plt.get_current_fig_manager()
+        self.mngr.window.setGeometry(*self.win_geom)
+        self.mngr.window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
 
         # create subplot
         self.ax_subplot = plt.subplot()
@@ -137,148 +185,171 @@ class WaveViewer(multiprocessing.Process):
                             bottom=bottom, top=1,
                             wspace=0, hspace=0)
 
-        if self.d_type == 'spec':
-            # read spectrogram
-            spec = hdf5storage.loadmat(self.mat_path)
-            self.wave_data = np.squeeze(spec['powspctrm'][0, :, :])
-            self.timestamps = np.squeeze(spec['time'])
-            spec_freq = np.squeeze(spec['freq'])
-
-            # create y tick labels
-            spec_y = np.arange(0, 201, 25)
-            spec_y_value = spec_freq[spec_y].astype(int)
-
-            # compute extent
-            xmin = self.x_cur
-            xmax = xmin + self.x_width - 1
-            extent = [self.timestamps[xmin],
-                      self.timestamps[xmax], 0, 200]
-
-            # show 2D image
-            self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
-                                                  extent=extent, cmap=plt.cm.jet,
-                                                  origin='lower',
-                                                  aspect='auto')
-            # adjust 2D image
-            # plt.colorbar(im)
-            self.ax_plot.set_clim(self.hmin, self.hmax)
-            self.ax_subplot.set_yticks(spec_y)
-            self.ax_subplot.set_yticklabels(spec_y_value)
-
-        else:
-            # read wave
-            wave = hdf5storage.loadmat(self.mat_path)
-            self.wave_data = np.squeeze(wave['data'])[:, 0]
-            self.timestamps = np.squeeze(wave['timestamps'])
-
-            # compute extent
-            xmin = self.x_cur
-            xmax = xmin + self.x_width - 1
-            xmin *= 10
-            xmax *= 10
-
-            # plot wave
-
-            if self.d_type == 'wave':
-                self.ax_plot, = self.ax_subplot.plot(
-                    self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
-                self.ax_subplot.set_xlim(
-                    self.timestamps[xmin], self.timestamps[xmax])
-
-            if self.d_type == 'x_axis':
-                self.ax_plot, = self.ax_subplot.plot(
-                    self.timestamps[xmin:xmax], [0 for i in range(xmin, xmax)], linewidth=0)
-                self.ax_subplot.set_xlim(
-                    self.timestamps[xmin], self.timestamps[xmax])
-
-                plt.subplots_adjust(left=0.05, right=1,
-                                    bottom=0.99, top=1,
-                                    wspace=0, hspace=0)
-                plt.yticks([])
-
-            # if not self.master:
-        timer = self.fig.canvas.new_timer(interval=10)
-        timer.add_callback(self.call_back)
-        timer.start()
-
+        # show glids
         plt.grid(ls='--', lw=0.25)
-        plt.show()
 
-    def call_back(self):
+    def disp_2d(self):
+        '''
+        disp_2d
+        '''
+        # read spectrogram
+        spec = hdf5storage.loadmat(self.mat_path)
+        self.wave_data = np.squeeze(spec['powspctrm'][0, :, :])
+        self.timestamps = np.squeeze(spec['time'])
+        spec_freq = np.squeeze(spec['freq'])
+
+        # compute extent
+        t_min = self.t_cur - self.t_width/2
+        t_max = self.t_cur + self.t_width/2
+        _, xmin = self.find_nearest(self.timestamps, t_min)
+        _, xmax = self.find_nearest(self.timestamps, t_max)
+        extent = [t_min, t_max, 0, 200]
+
+        # show 2D image
+        self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
+                                              extent=extent, cmap=plt.cm.jet,
+                                              origin='lower',
+                                              aspect='auto')
+
+        self.ax_subplot.set_xlim(t_min, t_max)
+
+        # set color level
+        # plt.colorbar(im)
+        self.ax_plot.set_clim(self.hmin, self.hmax)
+
+        # create y tick labels
+        spec_y = np.arange(0, 201, 25)
+        spec_y_value = spec_freq[spec_y].astype(int)
+        self.ax_subplot.set_yticks(spec_y)
+        self.ax_subplot.set_yticklabels(spec_y_value)
+
+    def disp_1d(self):
+        '''
+        disp_1d
+        '''
+        # read wave
+        wave = hdf5storage.loadmat(self.mat_path)
+        self.wave_data = np.squeeze(wave['data'])[:, 0]
+        self.timestamps = np.squeeze(wave['timestamps'])
+
+        # compute extent
+        t_min = self.t_cur - self.t_width/2
+        t_max = self.t_cur + self.t_width/2
+        _, xmin = self.find_nearest(self.timestamps, t_min)
+        _, xmax = self.find_nearest(self.timestamps, t_max)
+
+        # plot wave or x_axis
+        if self.d_type == 'wave':
+            self.ax_plot, = self.ax_subplot.plot(
+                self.timestamps[xmin:xmax], self.wave_data[xmin:xmax], linewidth=0.5)
+
+        if self.d_type == 'x_axis':
+            self.ax_plot, = self.ax_subplot.plot(
+                self.timestamps[xmin:xmax], np.full(xmax-xmin, 0), linewidth=0)
+
+            plt.subplots_adjust(left=0.05, right=1,
+                                bottom=0.99, top=1,
+                                wspace=0, hspace=0)
+            plt.yticks([])
+
+        self.ax_subplot.set_xlim(t_min, t_max)
+
+    def timer_call_back(self):
         '''
         call_back()
         '''
         if not self.task_queue.empty():
             next_task = self.task_queue.get()
-            self.press(next_task)
+            if next_task in ('right', 'left', 'up', 'down'):
+                self.t_cur = self.task_queue.get()
+                self.task_queue.task_done()
+                self.t_width = self.task_queue.get()
+                self.task_queue.task_done()
+                self.update_plot()
+            elif next_task == 'm':
+                self.orig_x = self.task_queue.get()
+                self.task_queue.task_done()
+                self.orig_y = self.task_queue.get()
+                self.task_queue.task_done()
+                self.move_window()
+            else:
+                self.cmd_interp(next_task)
+                self.update_plot()
+
             self.task_queue.task_done()
         return True
 
-    def press(self, event):
-        '''
-        press
-        '''
-        # print(self.process_list)
-        # print('press', event.key)
+    def local_key_call_back(self, event):
         sys.stdout.flush()
 
         if hasattr(event, 'key'):
             event = event.key
+        if event != 'e':
+            self.cmd_interp(event)
+            self.update_plot()
 
-        shift = int(self.x_width/16)
+    def find_nearest(self, array, value):
+        '''
+        find_nearest
+        '''
+        array = np.asarray(array)
+        idx = (np.abs(array - value)).argmin()
+        return array[idx], idx
 
-        if self.d_type == 'spec':
-            x_size = self.timestamps.size - 1
-        else:
-            x_size = int(self.timestamps.size / 10)
-
-        if event == 'right':
-            self.x_cur = self.x_cur + shift
-            if self.x_cur + self.x_width - 1 > (x_size - 1):
-                self.x_cur = (x_size - 1) - self.x_width + 1
-        elif event == 'left':
-            self.x_cur = self.x_cur - shift
-            if self.x_cur < 0:
-                self.x_cur = 0
-        elif event == 'up':
-            self.x_width = self.x_width * 2
-            if self.x_cur + self.x_width - 1 > (x_size - 1):
-                self.x_cur = (x_size - 1) - self.x_width + 1
-            if self.x_cur < 0:
-                self.x_cur = 0
-            if self.x_cur + self.x_width - 1 > (x_size - 1):
-                self.x_width = (x_size - 1)
-        elif event == 'down':
-            self.x_width = int(self.x_width / 2)
-        elif event == 'h':  # hotter
+    def cmd_interp(self, event):
+        '''
+        press
+        '''
+        if event == 'h':  # hotter
             self.hmax = self.hmax / 2
         elif event == 'c':  # cooler
             self.hmax = self.hmax * 2
+        elif event == 'x':
+            self.x_axis = not self.x_axis
         elif event == 'e':
             plt.close(self.fig)
 
-        xmin = self.x_cur
-        xmax = self.x_cur + self.x_width - 1
+    def update_plot(self):
+        # compute extent
+        t_min = self.t_cur - self.t_width/2
+        t_max = self.t_cur + self.t_width/2
+        _, xmin = self.find_nearest(self.timestamps, t_min)
+        _, xmax = self.find_nearest(self.timestamps, t_max)
 
         if self.d_type == 'spec':
-            extent = [self.timestamps[xmin],
-                      self.timestamps[xmax], 0, 200]
+            extent = [t_min, t_max, 0, 200]
 
-            # print('press', event, ': ', xmin, xmax, self.hmax)
             self.ax_plot.set_data(self.wave_data[:, xmin:xmax])
             self.ax_plot.set_clim(self.hmin, self.hmax)
             self.ax_plot.set_extent(extent)
-        else:
-            xmin *= 10
-            xmax *= 10
+            self.ax_subplot.set_xlim(t_min, t_max)
 
-            # print('press', event, ': ', xmin, xmax)
+        else:
             self.ax_plot.set_data(
                 self.timestamps[xmin:xmax], self.wave_data[xmin:xmax])
-            # self.ax_subplot.relim()
-            self.ax_subplot.set_xlim(
-                self.timestamps[xmin], self.timestamps[xmax])
+            self.ax_subplot.relim()
+            self.ax_subplot.set_xlim(t_min, t_max)
             self.ax_subplot.autoscale_view(True, True, True)
+
+        if self.d_type != 'x_axis':
+            if self.x_axis:
+                bottom = 0.2
+            else:
+                bottom = 0.0
+            plt.subplots_adjust(left=0.05, right=1,
+                                bottom=bottom, top=1,
+                                wspace=0, hspace=0)
+
+        self.fig.canvas.draw()
+
+    def move_window(self):
+        '''
+        move_window
+        '''
+        geom = self.mngr.window.geometry()
+        _, _, x_len, y_len = geom.getRect()
+
+        self.mngr.window.setGeometry(self.orig_x, self.orig_y, x_len, y_len)
 
         self.fig.canvas.draw()
 
@@ -287,20 +358,30 @@ if __name__ == '__main__':
 
     # open windows for each waves and specs
     process_members = [
-        [0, r'RIG01_171219_140419_specg_flat.mat',
+        [0, r'input_data\RIG01_171219_140419_specg_flat.mat',
             'spec', (0, 100, 1000, 100)],
-        [1, r'RIG01_171219_140419_lfp_flat.mat', 'wave', (0, 200, 1000, 100)],
-        [2, r'RIG01_171219_140419_gamma_flat.mat',
+        [1, r'input_data\RIG01_171219_140419_lfp_flat.mat',
+            'wave', (0, 200, 1000, 100)],
+        [2, r'input_data\RIG01_171219_140419_gamma_flat.mat',
             'wave', (0, 300, 1000, 100)],
-        [3, r'RIG01_171219_140419_gamma_flat.mat',
+        [3, r'input_data\RIG01_171219_140419_gamma_flat.mat',
             'wave', (0, 400, 1000, 100)],
-        [4, r'RIG01_171219_140419_gamma_flat.mat',
+        [4, r'input_data\RIG01_171219_140419_gamma_flat.mat',
             'wave', (0, 500, 1000, 100)],
-        [5, r'RIG01_171219_140419_gamma_flat.mat',
+        [5, r'input_data\RIG01_171219_140419_gamma_flat.mat',
             'wave', (0, 600, 1000, 100)],
-        [6, r'RIG01_171219_140419_gamma_flat.mat',
+        [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
             'x_axis', (0, 700, 1000, 30)]
     ]
+
+    # process_members = [
+    #     [0, r'input_data\short_specg_flat.mat',
+    #      'spec', (0, 100, 1000, 100)],
+    #     [1, r'input_data\short_gamma_flat.mat',
+    #      'wave', (0, 200, 1000, 100)],
+    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #      'x_axis', (0, 300, 1000, 30)]
+    # ]
 
     input_process_list = {}
 
@@ -318,7 +399,7 @@ if __name__ == '__main__':
         input_process_list[str(process[0])] = (process_id, task, result)
 
     # open master window for control
-    masterWin = WaveViewerMaster(input_process_list, (0, 20, 1000, 80))
+    masterWin = WaveViewerMaster(input_process_list, (0, 20, 1000, 80), 3600.0)
     masterWin.run()
 
     # wait until all processes stop
