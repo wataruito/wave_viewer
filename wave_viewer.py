@@ -6,6 +6,16 @@ Simple viewer for neuronal recorded/processed data
         spectrogram from fieldtrip
         PAC fA and fP map from BrainStorm
         LFP and band filtered data from BuzCode
+
+Interface:
+    input_files - specify input files
+    window_geo - window size and initial position
+
+    h: color hotter
+    c: color cooler
+    up: larger time range (shrink)
+    down: smaller time range (magnify)
+    left/right: move viewing window
 '''
 import math
 import sys
