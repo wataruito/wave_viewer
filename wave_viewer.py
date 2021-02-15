@@ -1,7 +1,7 @@
 '''
 wave-viewer.py
 '''
-
+import math
 import sys
 import multiprocessing
 import numpy as np
@@ -122,10 +122,12 @@ class WaveViewer(multiprocessing.Process):
         self.t_width = 10.0
         self.t_cur = 10.0
 
-        self.hmin, self.hmax = 0.0, 8192000.0
+        self.hmin, self.hmax = 0.0, 0.0
+        self.color_fac = 1.0
 
         self.wave_data = []
         self.timestamps = []
+        self.spec_freq = []
 
         self.fig = []
         self.ax_subplot = []
@@ -144,7 +146,7 @@ class WaveViewer(multiprocessing.Process):
 
         self.create_window()
 
-        if self.d_type == 'spec':
+        if self.d_type in ('spec', 'paca', 'pacp'):
             self.disp_2d()
         else:
             self.disp_1d()
@@ -196,14 +198,17 @@ class WaveViewer(multiprocessing.Process):
         spec = hdf5storage.loadmat(self.mat_path)
         self.wave_data = np.squeeze(spec['powspctrm'][0, :, :])
         self.timestamps = np.squeeze(spec['time'])
-        spec_freq = np.squeeze(spec['freq'])
+        self.spec_freq = np.squeeze(spec['freq'])
 
         # compute extent
         t_min = self.t_cur - self.t_width/2
         t_max = self.t_cur + self.t_width/2
         _, xmin = self.find_nearest(self.timestamps, t_min)
         _, xmax = self.find_nearest(self.timestamps, t_max)
-        extent = [t_min, t_max, 0, 200]
+
+        extent = [t_min, t_max, math.log(
+            self.spec_freq[0], 2), math.log(self.spec_freq[-1], 2)]
+        #extent = [t_min, t_max, 0, 200]
 
         # show 2D image
         self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
@@ -215,11 +220,26 @@ class WaveViewer(multiprocessing.Process):
 
         # set color level
         # plt.colorbar(im)
+        if self.d_type == 'spec':
+            self.hmin, self.hmax = 0.0, 8192000.0
+            self.color_fac = 2.0
+        if self.d_type == 'paca':
+            self.hmin, self.hmax = 0.0, 0.5
+            self.color_fac = 1.2
+        if self.d_type == 'pacp':
+            self.hmin, self.hmax = 0.0, 0.000001
+            self.color_fac = 1.2
+
         self.ax_plot.set_clim(self.hmin, self.hmax)
 
         # create y tick labels
-        spec_y = np.arange(0, 201, 25)
-        spec_y_value = spec_freq[spec_y].astype(int)
+        spec_y = np.arange(
+            math.log(self.spec_freq[0], 2), math.log(self.spec_freq[-1], 2) + 1).astype(int)
+        spec_y_value = 2**spec_y
+
+        # spec_y = np.arange(0, 201, 25)
+        # spec_y_value = spec_freq[spec_y].astype(int)
+
         self.ax_subplot.set_yticks(spec_y)
         self.ax_subplot.set_yticklabels(spec_y_value)
 
@@ -301,9 +321,9 @@ class WaveViewer(multiprocessing.Process):
         press
         '''
         if event == 'h':  # hotter
-            self.hmax = self.hmax / 2
+            self.hmax = self.hmax / self.color_fac
         elif event == 'c':  # cooler
-            self.hmax = self.hmax * 2
+            self.hmax = self.hmax * self.color_fac
         elif event == 'x':
             self.x_axis = not self.x_axis
         elif event == 'e':
@@ -316,8 +336,10 @@ class WaveViewer(multiprocessing.Process):
         _, xmin = self.find_nearest(self.timestamps, t_min)
         _, xmax = self.find_nearest(self.timestamps, t_max)
 
-        if self.d_type == 'spec':
-            extent = [t_min, t_max, 0, 200]
+        if self.d_type in ('spec', 'paca', 'pacp'):
+            #extent = [t_min, t_max, 0, 200]
+            extent = [t_min, t_max, math.log(
+                self.spec_freq[0], 2), math.log(self.spec_freq[-1], 2)]
 
             self.ax_plot.set_data(self.wave_data[:, xmin:xmax])
             self.ax_plot.set_clim(self.hmin, self.hmax)
@@ -360,18 +382,22 @@ if __name__ == '__main__':
     process_members = [
         [0, r'input_data\RIG01_171219_140419_specg_flat.mat',
             'spec', (0, 100, 1000, 100)],
-        [1, r'input_data\RIG01_171219_140419_lfp_flat.mat',
-            'wave', (0, 200, 1000, 100)],
-        [2, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-            'wave', (0, 300, 1000, 100)],
-        [3, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+        [1, r'input_data\RIG01_171219_140419_irtpaca_flat.mat',
+            'paca', (0, 200, 1000, 100)],
+        [2, r'input_data\RIG01_171219_140419_irtpacp_flat.mat',
+            'pacp', (0, 300, 1000, 100)],
+        [3, r'input_data\RIG01_171219_140419_lfp_flat.mat',
             'wave', (0, 400, 1000, 100)],
-        [4, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+        [4, r'input_data\RIG01_171219_140419_delta_flat.mat',
             'wave', (0, 500, 1000, 100)],
-        [5, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+        [5, r'input_data\RIG01_171219_140419_theta_flat.mat',
             'wave', (0, 600, 1000, 100)],
-        [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-            'x_axis', (0, 700, 1000, 30)]
+        [6, r'input_data\RIG01_171219_140419_alphabeta_flat.mat',
+            'wave', (0, 700, 1000, 100)],
+        [7, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+            'wave', (0, 800, 1000, 100)],
+        [8, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+            'x_axis', (0, 900, 1000, 30)]
     ]
 
     # process_members = [
@@ -381,6 +407,20 @@ if __name__ == '__main__':
     #      'wave', (0, 200, 1000, 100)],
     #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
     #      'x_axis', (0, 300, 1000, 30)]
+    # ]
+
+    # process_members = [
+    #     [1, r'input_data\RIG01_171219_140419_irtpaca_flat.mat',
+    #         'pac', (0, 100, 1000, 100)],
+    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #      'x_axis', (0, 200, 1000, 30)]
+    # ]
+
+    # process_members = [
+    #     [1, r'input_data\RIG01_171219_140419_irtpacp_flat.mat',
+    #         'pacp', (0, 100, 1000, 100)],
+    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
+    #      'x_axis', (0, 200, 1000, 30)]
     # ]
 
     input_process_list = {}
