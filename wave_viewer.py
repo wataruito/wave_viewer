@@ -1,5 +1,11 @@
 '''
 wave-viewer.py
+
+Simple viewer for neuronal recorded/processed data
+    Capable to display > 1h data for
+        spectrogram from fieldtrip
+        PAC fA and fP map from BrainStorm
+        LFP and band filtered data from BuzCode
 '''
 import math
 import sys
@@ -107,7 +113,7 @@ class WaveViewer(multiprocessing.Process):
         Subordinate window
     '''
 
-    def __init__(self, task_queue, result_queue, w_id, mat_path, d_type, win_geom):
+    def __init__(self, task_queue, result_queue, mat_path, d_type, chan_id, win_geom):
         '''
         '''
         multiprocessing.Process.__init__(self)
@@ -117,7 +123,7 @@ class WaveViewer(multiprocessing.Process):
 
         self.mat_path = mat_path
         self.d_type = d_type
-        self.w_id = w_id
+        self.chan_id = chan_id
 
         self.t_width = 10.0
         self.t_cur = 10.0
@@ -196,7 +202,7 @@ class WaveViewer(multiprocessing.Process):
         '''
         # read spectrogram
         spec = hdf5storage.loadmat(self.mat_path)
-        self.wave_data = np.squeeze(spec['powspctrm'][0, :, :])
+        self.wave_data = np.squeeze(spec['powspctrm'][self.chan_id, :, :])
         self.timestamps = np.squeeze(spec['time'])
         self.spec_freq = np.squeeze(spec['freq'])
 
@@ -207,8 +213,8 @@ class WaveViewer(multiprocessing.Process):
         _, xmax = self.find_nearest(self.timestamps, t_max)
 
         extent = [t_min, t_max, math.log(
-            self.spec_freq[0], 2), math.log(self.spec_freq[-1], 2)]
-        #extent = [t_min, t_max, 0, 200]
+            self.spec_freq[0], 2.0), math.log(self.spec_freq[-1], 2.0)]
+        # extent = [t_min, t_max, 0, 200]
 
         # show 2D image
         self.ax_plot = self.ax_subplot.imshow(self.wave_data[:, xmin:xmax],
@@ -234,7 +240,10 @@ class WaveViewer(multiprocessing.Process):
 
         # create y tick labels
         spec_y = np.arange(
-            math.log(self.spec_freq[0], 2), math.log(self.spec_freq[-1], 2) + 1).astype(int)
+            math.log(self.spec_freq[0], 2),
+            math.log(self.spec_freq[-1], 2) -
+            math.fmod(math.log(self.spec_freq[-1], 2), 1) + 1
+        ).astype(int)
         spec_y_value = 2**spec_y
 
         # spec_y = np.arange(0, 201, 25)
@@ -249,7 +258,7 @@ class WaveViewer(multiprocessing.Process):
         '''
         # read wave
         wave = hdf5storage.loadmat(self.mat_path)
-        self.wave_data = np.squeeze(wave['data'])[:, 0]
+        self.wave_data = np.squeeze(wave['data'])[:, self.chan_id]
         self.timestamps = np.squeeze(wave['timestamps'])
 
         # compute extent
@@ -300,6 +309,9 @@ class WaveViewer(multiprocessing.Process):
         return True
 
     def local_key_call_back(self, event):
+        '''
+        local_key_call_back
+        '''
         sys.stdout.flush()
 
         if hasattr(event, 'key'):
@@ -330,6 +342,9 @@ class WaveViewer(multiprocessing.Process):
             plt.close(self.fig)
 
     def update_plot(self):
+        '''
+        update_plot
+        '''
         # compute extent
         t_min = self.t_cur - self.t_width/2
         t_max = self.t_cur + self.t_width/2
@@ -337,9 +352,9 @@ class WaveViewer(multiprocessing.Process):
         _, xmax = self.find_nearest(self.timestamps, t_max)
 
         if self.d_type in ('spec', 'paca', 'pacp'):
-            #extent = [t_min, t_max, 0, 200]
+            # extent = [t_min, t_max, 0, 200]
             extent = [t_min, t_max, math.log(
-                self.spec_freq[0], 2), math.log(self.spec_freq[-1], 2)]
+                self.spec_freq[0], 2.0), math.log(self.spec_freq[-1], 2.0)]
 
             self.ax_plot.set_data(self.wave_data[:, xmin:xmax])
             self.ax_plot.set_clim(self.hmin, self.hmax)
@@ -376,67 +391,63 @@ class WaveViewer(multiprocessing.Process):
         self.fig.canvas.draw()
 
 
-if __name__ == '__main__':
+def spawn_wins(process_members, window_spec):
+    '''
+    spawn_wins
+    '''
+    win_x_len = window_spec['win_x_len']
+    win_y_len = window_spec['win_y_len']
+    win_y_len_axis = window_spec['win_y_len_axis']
+    win_x_origin = window_spec['win_x_origin']
+    win_y_origin = window_spec['win_y_origin']
 
-    # open windows for each waves and specs
-    process_members = [
-        [0, r'input_data\RIG01_171219_140419_specg_flat.mat',
-            'spec', (0, 100, 1000, 100)],
-        [1, r'input_data\RIG01_171219_140419_irtpaca_flat.mat',
-            'paca', (0, 200, 1000, 100)],
-        [2, r'input_data\RIG01_171219_140419_irtpacp_flat.mat',
-            'pacp', (0, 300, 1000, 100)],
-        [3, r'input_data\RIG01_171219_140419_lfp_flat.mat',
-            'wave', (0, 400, 1000, 100)],
-        [4, r'input_data\RIG01_171219_140419_delta_flat.mat',
-            'wave', (0, 500, 1000, 100)],
-        [5, r'input_data\RIG01_171219_140419_theta_flat.mat',
-            'wave', (0, 600, 1000, 100)],
-        [6, r'input_data\RIG01_171219_140419_alphabeta_flat.mat',
-            'wave', (0, 700, 1000, 100)],
-        [7, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-            'wave', (0, 800, 1000, 100)],
-        [8, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-            'x_axis', (0, 900, 1000, 30)]
-    ]
-
-    # process_members = [
-    #     [0, r'input_data\short_specg_flat.mat',
-    #      'spec', (0, 100, 1000, 100)],
-    #     [1, r'input_data\short_gamma_flat.mat',
-    #      'wave', (0, 200, 1000, 100)],
-    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-    #      'x_axis', (0, 300, 1000, 30)]
-    # ]
-
-    # process_members = [
-    #     [1, r'input_data\RIG01_171219_140419_irtpaca_flat.mat',
-    #         'pac', (0, 100, 1000, 100)],
-    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-    #      'x_axis', (0, 200, 1000, 30)]
-    # ]
-
-    # process_members = [
-    #     [1, r'input_data\RIG01_171219_140419_irtpacp_flat.mat',
-    #         'pacp', (0, 100, 1000, 100)],
-    #     [6, r'input_data\RIG01_171219_140419_gamma_flat.mat',
-    #      'x_axis', (0, 200, 1000, 30)]
-    # ]
-
-    input_process_list = {}
-
+    process_list = {}
+    process_list_num = 0
     for process in process_members:
+        win_y_origin = win_y_origin + win_y_len
+        if process[1] == 'x_axis':
+            input_tuple = tuple(process) + \
+                ((win_x_origin, win_y_origin, win_x_len, win_y_len_axis),)
+        else:
+            input_tuple = tuple(process) + \
+                ((win_x_origin, win_y_origin, win_x_len, win_y_len),)
+
+        # print(input_tuple)
+
+    # for process in process_members:
         task = multiprocessing.JoinableQueue()
         result = multiprocessing.Queue()
-
-        # input_tuple = (process[0], process[1], process[2], process[3])
-        input_tuple = tuple(process)
 
         process_id = WaveViewer(task, result, *input_tuple)
         process_id.start()
         print('Started: ', process_id)
 
-        input_process_list[str(process[0])] = (process_id, task, result)
+        process_list_num += 1
+        process_list[str(process_list_num)] = (process_id, task, result)
+
+    return process_list
+
+
+if __name__ == '__main__':
+
+    window_geo = {'win_x_len': 1000, 'win_y_len': 100, 'win_y_len_axis': 30,
+                  'win_x_origin': 0, 'win_y_origin': 0}
+
+    # open windows for each waves and specs
+    input_files = [
+        [r'input_data\RIG01_171219_140419_specg_flat.mat', 'spec', 0],
+        [r'input_data\RIG01_171219_140419_irtpaca_flat.mat', 'paca', 0],
+        [r'input_data\RIG01_171219_140419_irtpacp_flat.mat', 'pacp', 0],
+        [r'input_data\RIG01_171219_140419_lfp_flat.mat', 'wave', 0],
+        [r'input_data\RIG01_171219_140419_delta_flat.mat', 'wave', 0],
+        [r'input_data\RIG01_171219_140419_theta_flat.mat', 'wave', 0],
+        [r'input_data\RIG01_171219_140419_alphabeta_flat.mat', 'wave', 0],
+        [r'input_data\RIG01_171219_140419_gamma_flat.mat', 'wave', 0],
+        [r'input_data\RIG01_171219_140419_lfp_flat.mat', 'x_axis', 0]
+    ]
+
+    # start each window
+    input_process_list = spawn_wins(input_files, window_geo)
 
     # open master window for control
     masterWin = WaveViewerMaster(input_process_list, (0, 20, 1000, 80), 3600.0)
@@ -445,3 +456,19 @@ if __name__ == '__main__':
     # wait until all processes stop
     for _process_id_key in input_process_list:
         input_process_list[_process_id_key][0].join()
+
+    # process_members = [
+    #     [r'input_data\short_specg_flat.mat', 'spec', 0],
+    #     [r'input_data\short_gamma_flat.mat', 'wave', 0],
+    #     [r'input_data\RIG01_171219_140419_gamma_flat.mat', 'x_axis', 0]
+    # ]
+
+    # process_members = [
+    #     [r'input_data\RIG01_171219_140419_irtpaca_flat.mat', 'paca', 0],
+    #     [r'input_data\RIG01_171219_140419_gamma_flat.mat', 'x_axis', 0]
+    # ]
+
+    # process_members = [
+    #     [r'input_data\RIG01_171219_140419_irtpacp_flat.mat', 'pacp', 0],
+    #     [r'input_data\RIG01_171219_140419_gamma_flat.mat', 'x_axis', 0]
+    # ]
