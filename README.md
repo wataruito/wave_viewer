@@ -1,6 +1,24 @@
 # wave_viewer
+
+Simple viewer for neuronal recorded/processed data, capable to display > 1h data for
+  - spectrogram from fieldtrip
+  - PAC fA and fP map from BrainStorm
+  - LFP and band filtered data from BuzCode
+
+It is scalable using multiprocessing.
+
+### Interface: ###
+
+ input_files - specify input files<BR>
+ window_geo - window size and initial position<BR>
  
-### Install env
+ key h: color hotter<BR>
+ key c: color cooler<BR>
+ key up: larger time range (shrink)<BR>
+ key down: smaller time range (magnify)<BR>
+ key left/right: move viewing window<BR>
+
+### Install env ###
 1. make matplotlib interactive in jupyter lab
 ```
 conda create --name wave_viewer
