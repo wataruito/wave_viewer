@@ -18,3 +18,5 @@ RIG01_171219_140419_specg_flat.mat
 __pycache__
 brainstorm_210209
 input_data
+.gitignore
+
