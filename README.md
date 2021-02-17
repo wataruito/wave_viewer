@@ -7,7 +7,7 @@ Simple viewer for neuronal recorded/processed data, capable to display > 1h data
 
 It is scalable using multiprocessing.
 
-### Interface: ###
+## Interface:
     input_files - specify input files
     window_geo - window size and initial position
 
@@ -17,7 +17,7 @@ It is scalable using multiprocessing.
     key down: smaller time range (magnify)
     key left/right: move viewing window
 
-### Install env: ###
+## Install env:
 1. make matplotlib interactive in jupyter lab
 ```
 conda create --name wave_viewer
