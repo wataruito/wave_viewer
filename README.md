@@ -7,6 +7,12 @@ Simple viewer for neuronal recorded/processed data, capable to display > 1h data
 
 It is scalable using multiprocessing.
 
+#### Not implimented yet
+  - synchronize with video player
+  - show each frame boundary as time-seriese
+  - show/edit behavioral annotation as time-seriese 
+
+
 ## Interface:
     input_files - specify input files
     window_geo - window size and initial position
