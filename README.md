@@ -9,8 +9,8 @@ It is scalable using multiprocessing.
 
 #### Not implimented yet
   - synchronize with video player
-  - show each frame boundary as time-seriese
-  - show/edit behavioral annotation as time-seriese 
+  - show each frame boundary as time-series
+  - show/edit behavioral annotation as time-series
 
 
 ## Interface:
