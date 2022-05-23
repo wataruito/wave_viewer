@@ -444,17 +444,42 @@ if __name__ == '__main__':
                   'win_x_origin': 0, 'win_y_origin': 0}
 
     # open windows for each waves and specs
+    _base_path = r'input_data\RIG01_171219_190418_'
+
     input_files = [
-        [r'input_data\RIG01_171219_140419_specg_flat.mat', 'spec', 0],
-        [r'input_data\RIG01_171219_140419_irtpaca_flat.mat', 'paca', 0],
-        [r'input_data\RIG01_171219_140419_irtpacp_flat.mat', 'pacp', 0],
-        [r'input_data\RIG01_171219_140419_lfp_flat.mat', 'wave', 0],
-        [r'input_data\RIG01_171219_140419_delta_flat.mat', 'wave', 0],
-        [r'input_data\RIG01_171219_140419_theta_flat.mat', 'wave', 0],
-        [r'input_data\RIG01_171219_140419_alphabeta_flat.mat', 'wave', 0],
-        [r'input_data\RIG01_171219_140419_gamma_flat.mat', 'wave', 0],
-        [r'input_data\RIG01_171219_140419_lfp_flat.mat', 'x_axis', 0]
+        [_base_path+'specg_flat.mat',      'spec',     0],
+        [_base_path+'lfp_flat.mat',        'wave',     0],
+        [_base_path+'gamma_flat.mat',      'wave',     0],
+        [_base_path+'irtpaca_flat.mat',    'paca',     3],
+
+        [_base_path+'irtpacp_flat.mat',    'pacp',     3],
+        [_base_path+'delta_flat.mat',      'wave',     2],
+        [_base_path+'lfp_flat.mat',        'x_axis',   0]
     ]
+
+    # input_files = [
+    #     [_base_path+'specg_flat.mat',      'spec',     0],
+    #     [_base_path+'irtpaca_flat.mat',    'paca',     0],
+    #     [_base_path+'irtpacp_flat.mat',    'pacp',     0],
+    #     [_base_path+'lfp_flat.mat',        'wave',     0],
+    #     [_base_path+'delta_flat.mat',      'wave',     0],
+    #     [_base_path+'theta_flat.mat',      'wave',     0],
+    #     [_base_path+'alphabeta_flat.mat',  'wave',     0],
+    #     [_base_path+'gamma_flat.mat',      'wave',     0],
+    #     [_base_path+'lfp_flat.mat',        'x_axis',   0]
+    # ]
+
+    # input_files = [
+    #     [r'input_data\RIG01_171219_140419_specg_flat.mat', 'spec', 0],
+    #     [r'input_data\RIG01_171219_140419_irtpaca_flat.mat', 'paca', 0],
+    #     [r'input_data\RIG01_171219_140419_irtpacp_flat.mat', 'pacp', 0],
+    #     [r'input_data\RIG01_171219_140419_lfp_flat.mat', 'wave', 0],
+    #     [r'input_data\RIG01_171219_140419_delta_flat.mat', 'wave', 0],
+    #     [r'input_data\RIG01_171219_140419_theta_flat.mat', 'wave', 0],
+    #     [r'input_data\RIG01_171219_140419_alphabeta_flat.mat', 'wave', 0],
+    #     [r'input_data\RIG01_171219_140419_gamma_flat.mat', 'wave', 0],
+    #     [r'input_data\RIG01_171219_140419_lfp_flat.mat', 'x_axis', 0]
+    # ]
 
     # start each window
     input_process_list = spawn_wins(input_files, window_geo)
